@@ -2,37 +2,47 @@ name: Update Mention Dashboard
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # 09:00 น. เวลาไทย (UTC+7 → UTC 02:00)
-    - cron: '0 8 * * *'   # 15:00 น. เวลาไทย (UTC+7 → UTC 08:00)
-  workflow_dispatch:        # รันมือได้ทุกเมื่อ
+    - cron: '0 2 * * *'    # 09:00 น. เวลาไทย (UTC+7)
+    - cron: '0 8 * * *'    # 15:00 น. เวลาไทย (UTC+7)
+  workflow_dispatch:        # กด Run ด้วยมือได้จาก GitHub Actions tab
 
 jobs:
-  refresh:
+  update-dashboard:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout repo
+      # 1. Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
+      # 2. ติดตั้ง Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # 3. ติดตั้ง library ที่ต้องใช้
       - name: Install dependencies
-        run: pip install requests python-dateutil
+        run: pip install requests
 
-      - name: Generate dashboard HTML
+      # 4. รัน script ดึง Slack data และ update index.html
+      - name: Fetch Slack data and update dashboard
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
-        run: python generate_dashboard.py
+        run: python fetch_slack.py
 
-      - name: Commit & push updated dashboard
+      # 5. Commit & Push ถ้ามีการเปลี่ยนแปลง
+      - name: Commit and push if changed
         run: |
-          git config user.name "BeNeat Bot"
-          git config user.email "bot@beneat.co"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git diff --staged --quiet || git commit -m "🔄 Auto-refresh dashboard $(TZ='Asia/Bangkok' date '+%Y-%m-%d %H:%M')"
-          git push
+          if git diff --staged --quiet; then
+            echo "ไม่มีการเปลี่ยนแปลง — ข้าม commit"
+          else
+            TIMESTAMP=$(TZ='Asia/Bangkok' date '+%Y-%m-%d %H:%M น.')
+            git commit -m "🤖 Auto-update: Slack mentions ${TIMESTAMP}"
+            git push
+          fi
